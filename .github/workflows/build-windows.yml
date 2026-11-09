@@ -1,0 +1,48 @@
+name: Build pgvector for Windows
+
+on:
+  workflow_dispatch: # Allows you to trigger the build manually with a button
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout official source
+        uses: actions/checkout@v4
+
+      - name: Locate PostgreSQL on runner
+        id: pg
+        shell: pwsh
+        run: |
+          # Find the preinstalled PostgreSQL path on the Windows runner
+          $pgPath = Get-ChildItem "C:\Program Files\PostgreSQL" | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Found PostgreSQL at: $pgPath"
+          echo "PGROOT=$pgPath" >> $env:GITHUB_ENV
+
+      - name: Compile pgvector with MSVC
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          nmake /NOLOGO /F Makefile.win
+          nmake /NOLOGO /F Makefile.win install
+
+      - name: Package extension files into zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path ./dist/lib -Force
+          New-Item -ItemType Directory -Path ./dist/share/extension -Force
+
+          # Copy compiled binary and extension SQL/control files
+          Copy-Item "$env:PGROOT\lib\vector.dll" -Destination ./dist/lib/
+          Copy-Item "$env:PGROOT\share\extension\vector*" -Destination ./dist/share/extension/
+
+          # Create zip
+          Compress-Archive -Path ./dist/* -DestinationPath ./pgvector-windows-x64.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgvector-windows-x64
+          path: ./pgvector-windows-x64.zip
+          retention-days: 7
