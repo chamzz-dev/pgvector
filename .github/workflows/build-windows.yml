@@ -1,4 +1,4 @@
-name: Build pgvector for Windows
+name: Build pgvector for PostgreSQL 18 (Windows)
 
 on:
   workflow_dispatch:
@@ -8,22 +8,25 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout official source
+      - name: Checkout official pgvector source
         uses: actions/checkout@v4
 
-      - name: Setup MSVC developer tools
+      - name: Setup official Microsoft MSVC compiler
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Locate PostgreSQL on runner
+      - name: Download official PostgreSQL 18 Windows binaries
         shell: pwsh
         run: |
-          $pg = Get-ChildItem "C:\Program Files\PostgreSQL" | Select-Object -First 1 -ExpandProperty FullName
-          Write-Host "PostgreSQL detected at: $pg"
-          echo "PGROOT=$pg" >> $env:GITHUB_ENV
+          Write-Host "Downloading official PostgreSQL 18.6 binaries..."
+          Invoke-WebRequest -Uri "https://get.enterprisedb.com/postgresql/postgresql-18.6-5-windows-x64-binaries.zip" -OutFile "pg18.zip"
+          Expand-Archive -Path "pg18.zip" -DestinationPath "C:\pg18"
+          $pgroot = "C:\pg18\pgsql"
+          Write-Host "Configuring PGROOT to $pgroot"
+          echo "PGROOT=$pgroot" >> $env:GITHUB_ENV
 
-      - name: Compile pgvector with MSVC
+      - name: Compile pgvector with MSVC for PostgreSQL 18
         shell: cmd
         run: |
           nmake /NOLOGO /F Makefile.win
@@ -38,11 +41,11 @@ jobs:
           Copy-Item "$env:PGROOT\lib\vector.dll" -Destination ./dist/lib/
           Copy-Item "$env:PGROOT\share\extension\vector*" -Destination ./dist/share/extension/
 
-          Compress-Archive -Path ./dist/* -DestinationPath ./pgvector-windows-x64.zip
+          Compress-Archive -Path ./dist/* -DestinationPath ./pgvector-pg18-windows-x64.zip
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pgvector-windows-x64
-          path: ./pgvector-windows-x64.zip
+          name: pgvector-pg18-windows-x64
+          path: ./pgvector-pg18-windows-x64.zip
           retention-days: 7
